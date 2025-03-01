@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Web Chat Terminal</title>
+    <style>
+        body, html { height: 100%; margin: 0; font-family: 'Courier New', Courier, monospace; background-color: black; color: LawnGreen; overflow: hidden; pointer-events: auto; user-select: auto; }
+        a, a:visited { color: inherit; position: relative; z-index: 1; }
+        #terminal { height: 100%; padding: 10px; cursor: text; overflow-y: auto; }
+        #terminal:focus { outline: none; }
+        .input-line { white-space: pre-wrap; min-height: 20px; background-color: black; color: LawnGreen; border: none; outline: none; }
+        .output { color: Aquamarine; }
+        textarea { color: gold; background-color: black; border: 2px solid LawnGreen; }
+        button { color: black; background-color: LawnGreen; border: 2px solid LawnGreen; }
+    </style>
+</head>
+<body>
+    <div id="terminal"></div>
+    <script>
+const terminal = document.getElementById('terminal');
+let lastInput = '';
+let terminalStack = [];
+let terminalInterval;
+let defaultSystemPrompt = 'You are Simple-Web-Chat. Behave silly and funny but give true, proper answers. If possible, use friendly emojies.';
+let systemPrompt =  localStorage.getItem('systemprompt') || defaultSystemPrompt;
+let apihost = localStorage.getItem('apihost') || 'http://127.0.0.1:11434';
+let model = localStorage.getItem('model') || 'phi4';
+let promptPrefix = '] ';
+let pp = 0.0; // prompt processing
+let tg = 0.0; // text generation
+let stoptokens = ["[/INST]", "<|im_end|>", "<|end_of_turn|>", "<|eot_id|>", "<|end_header_id|>", "<EOS_TOKEN>", "</s>", "<|end|>"];
+let messages = [{role: 'system', content: defaultSystemPrompt}];
+terminalStack = [];
+let maxTokens = 600;
+
+const stringsToRemove = [
+    "[INST]", "<<USER>>", "<</INST>>", "<<SYS>>", "</SYS>>",
+    "<|im_start|>system", "<|im_start|>user", "<|im_start|>assistant", "<|im_start|>",
+    "<|start_header_id|>user", "<|start_header_id|>system", "<|start_header_id|>assistant"];
+
+log("\n\n");
+log("Simple Chat");
+log("Git&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: https://github.com/orbiter/llm-rag-cheat-sheet");
+log("API Host: " + apihost);
+log("Just Chat or set llm host i.e. with 'host http://127.0.0.1:8010'");
+
+function initializeTerminal() {
+    // [Event listener code remains unchanged]
+}
+
+let n_keep = 0;
+
+function executeCommand(command) {
+    const args = command.match(/('.*?'|".*?"|[^"\s]+)+/g); // Split by space, but ignore spaces inside quotes
+    switch (args[0]) {
+        case 'reset':
+            messages = [{role: 'system', content: defaultSystemPrompt}];
+            break;
+        case 'host':
+            if (args[1]) {
+                apihost = args[1];
+                localStorage.setItem('apihost', apihost);
+                log('set host api to ' + apihost);
+            } else {
+                log('Host API : ' + apihost);
+            }
+            break;
+        case 'model':
+            if (args[1]) {
+                model = args[1];
+                localStorage.setItem('model', model);
+                log('set model to ' + model);
+            } else {
+                log('model : ' + model);
+            }
+            break;
+        case 'ollama':
+            if (args[1]) {
+                let command = args[1];
+                if (command === 'ls') {
+                    log('');
+                    fetch(apihost + '/api/tags')
+                        .then(response => response.ok ? response.text() : Promise.reject('Error: ' + response.status))
+                        .then(text => JSON.parse(text).models.forEach(model => log(model.name)))
+                        .catch(error => log('Error: ' + error));
+                }
+                if (command === 'ps') {
+                    log('');
+                    fetch(apihost + '/api/ps')
+                        .then(response => response.ok ? response.text() : Promise.reject('Error: ' + response.status))
+                        .then(text => JSON.parse(text).models.forEach(model => log(model.name)))
+                        .catch(error => log('Error: ' + error.message));
+                }
+            }
+            break;
+        default:
+            llm(command, targethost = apihost, max_tokens = maxTokens);
+            break;
+    }
+    scrollToBottom();
+}
+
+function llm(prompt, targethost = apihost, max_tokens = 400, temperature = 0.1) {
+    messages.push({ role: "user", content: prompt });
+    let terminalLine = document.createElement('div');
+    terminalLine.classList.add('output');
+    terminalLine.innerHTML = "[preparing answer...]";
+    terminal.appendChild(terminalLine);
+
+    fetch(targethost + '/v1/chat/completions', {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            model: model,
+            temperature: temperature,
+            max_tokens: max_tokens,
+            messages: messages,
+            stop: stoptokens,
+            stream: true
+        })
+    })
+    .then(response => response.ok ? response.body.getReader() : Promise.reject(`Error: ${response.status}`))
+    .then(reader => {
+        let fullOutputText = "";
+        function processChunk() {
+            reader.read().then(result => {
+                if (result.done) {
+                    messages.push({ role: "assistant", content: fullOutputText });
+                    return;
+                }
+                let lines = new TextDecoder().decode(result.value).split('\n');
+                lines.forEach(line => {
+                    line = line.replace(/^data: /, '').trim();
+                    if (line && line !== '[DONE]') {
+                        try {
+                            let json = JSON.parse(line);
+                            if (json.choices[0].delta.content) {
+                                fullOutputText += json.choices[0].delta.content;
+                                terminalLine.innerHTML = md2html(fullOutputText);
+                                scrollToBottom();
+                            }
+                        } catch (e) {
+                            console.error('Error parsing JSON:', e);
+                        }
+                    }
+                });
+                processChunk();
+            });
+        }
+        processChunk();
+    })
+    .catch(error => console.error(error));
+
+    function md2html(text) {
+        let html = '', inCodeBlock = false, codeContent = '';
+        text.split('\n').forEach(line => {
+            line = line.trim();
+            if (line.startsWith('```')) {
+                inCodeBlock = !inCodeBlock;
+                if (!inCodeBlock) {
+                    html += `<pre><code>${codeContent}</code></pre>\n`;
+                    codeContent = '';
+                }
+            } else if (inCodeBlock) {
+                codeContent += line + '\n';
+            } else if (!line) {
+                html += '<br>\n';
+            } else {
+                let level = line.match(/^#+/);
+                if (level) {
+                    html += `<h${level[0].length}>${line.slice(level[0].length).trim()}</h${level[0].length}>\n`;
+                } else {
+                    line = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                               .replace(/__(.+?)__/g, '<strong>$1</strong>')
+                               .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                               .replace(/_(.+?)_/g, '<em>$1</em>')
+                               .replace(/`(.*?)`/g, '<code>$1</code>')
+                               .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2">$1</a>')
+                               .replace(/!\[(.*?)\]\((.*?)\)/g, '<img src="$2" alt="$1">')
+                               .replace(/^-{3,}/g, '<hr>')
+                               .replace(/^- (.+)/g, '<li>$1</li>');
+                    html += `<p>${line}</p>\n`;
+                }
+            }
+        });
+        if (inCodeBlock) html += `<pre><code>${codeContent}</code></pre>\n`;
+        return html;
+    }
+}
+
+async function log(terminalText) {
+    const tokens = terminalText.split(/ +/).map(token => token + ' ');
+    if (terminalStack.length > 0) {
+        lastToken = terminalStack.pop();
+        if (lastToken !== '[DONE]') {
+            terminalStack.push(lastToken);
+        }
+        terminalStack.push(...tokens);
+        terminalStack.push('<br>', '[DONE]');
+        return;
+    }
+
+    let terminalLine = document.createElement('div');
+    terminalLine.classList.add('output');
+    terminal.appendChild(terminalLine);
+    terminalStack.push(...tokens);
+    terminalStack.push('<br>', '[DONE]');
+
+    let fullOutputText = "";
+    terminalInterval = setInterval(() => {
+        if (terminalStack.length > 0) {
+            const token = terminalStack.shift();
+            fullOutputText += token;
+
+            if (token === '[DONE]') {
+                clearInterval(terminalInterval);
+                return;
+            }
+
+            terminalLine.innerHTML = `${fullOutputText}`;
+        }
+        scrollToBottom();
+    }, 50);
+}
+
+function initializeTerminal() {
+    terminal.addEventListener('keydown', function (event) {
+        // read the text entered in the terminal when the user hits the enter key, but distinguish enter with and without shift or ctrl:
+        if (event.key === 'Enter') {
+            event.preventDefault(); // Prevent default Enter behavior
+            const inputLines = terminal.querySelectorAll('.input-line');
+            const inputLine = inputLines[inputLines.length - 1];
+            if (inputLine) {
+                if (event.shiftKey) {
+                    // the user has entered a new line into the input console using shift+enter
+                    inputLine.innerHTML += '<br>\u200B'; // Insert <br> followed by a zero-width space
+                    placeCaretAtEnd(inputLine);
+                } else {
+                    // user finished entering the command with the enter key
+                    inputText = inputLine.textContent.substring(promptPrefix.length);
+                    executeCommand(inputText.trim());
+                    lastInput = inputText;
+                    appendInputPrefix();
+                }
+            }
+        }
+        
+    });
+    appendInputPrefix();
+}
+
+// add another input line to the terminal
+function appendInputPrefix() {
+    const inputLine = document.createElement('div');
+    inputLine.classList.add('input-line');
+    inputLine.textContent = promptPrefix; // consider usage of block elements: https://www.unicode.org/charts/PDF/U2580.pdf
+    inputLine.contentEditable = true;
+    terminal.appendChild(inputLine);
+    placeCaretAtEnd(inputLine);
+    scrollToBottom();
+}
+
+// place the caret at the end of the input line
+function placeCaretAtEnd(el) {
+    el.focus();
+    if (typeof window.getSelection != "undefined"
+        && typeof document.createRange != "undefined") {
+        var range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(false);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+    }
+}
+
+function scrollToBottom() {
+    terminal.scrollTop = terminal.scrollHeight;
+    terminal.scrollIntoView(false);
+}
+
+initializeTerminal();
+
+    </script>
+</body>
+</html>
