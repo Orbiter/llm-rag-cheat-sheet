@@ -12,7 +12,8 @@ payload = {
     ],
     "stream": False
 }
-conn.request("POST", "/v1/chat/completions", json.dumps(payload), {"Content-Type": "application/json"})
+conn.request("POST", "/v1/chat/completions", json.dumps(payload),
+             {"Content-Type": "application/json"})
 response_text = conn.getresponse().read().decode()
 response_json = json.loads(response_text)
 print(json.dumps(response_json, indent=2))

@@ -6,13 +6,12 @@ format = {
     "type": "object",
     "properties": {
         "english": { "type": "string" }, "german": { "type": "string" },
-        "spanish": { "type": "string" }, "italian": { "type": "string" },
-        "french": { "type": "string" }
+        "spanish": { "type": "string" }, "italian": { "type": "string" }
     },
     "required": [ "german", "spanish" ]
 }
 messages = [
-    {"role": "system", "content": "You are a helpful translator. Translate the user sentence. Write your answer as json."},
+    {"role": "system", "content": "Translate the user sentence."},
     {"role": "user", "content": "I love programming."}
 ]
 
