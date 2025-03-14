@@ -120,14 +120,13 @@ def console(prompt):
             raise Exception(f"Failed to parse JSON response from the API: {e}, t: {t}")
         
 def main():
+    global endpoint, model
     parser = argparse.ArgumentParser(description='Simple Shell Chat')
-    parser.add_argument('model', nargs='?', default='llama3.2:latest', help='An additional parameter for the command')
-    parser.add_argument('--api', action='append', help="Specify backend OpenAI API endpoints (i.e. ollama); can be used multiple times")
+    parser.add_argument('--model', type=str, required=False, default=model, help='An additional parameter for the command')
+    parser.add_argument('--api', type=str, required=False, default=endpoint, help="Specify backend OpenAI API endpoints (i.e. ollama); can be used multiple times")
 
     args = parser.parse_args()
-    
-    # initialize output queue and status
-    endpoint = args.api if args.api else "http://localhost:11434"
+    endpoint = args.api
     model = args.model
     multi_line = False
 
