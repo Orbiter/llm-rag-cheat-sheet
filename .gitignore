@@ -2,3 +2,5 @@
 */.DS_Store
 context/pg3008.txt
 context/pg50221.txt
+image/images/*.png
+image/images/*.jpg
