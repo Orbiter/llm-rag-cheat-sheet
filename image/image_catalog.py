@@ -40,7 +40,9 @@ def image_catalog_entry(image_file):
         response = conn.getresponse()
         response_text = response.read().decode()
         response_json = json.loads(response_text)
-        print(json.dumps(response_json, indent=2))
+        content = response_json["message"]["content"]
+        content_json = json.loads(content)
+        print(json.dumps(content_json, indent=2))
     except Exception as e:
         print(f"Error: {e}")
     finally:
@@ -50,5 +52,5 @@ image_folder = "images"
 image_files = os.listdir(image_folder)
 image_files = [f"{image_folder}/{image_file}" for image_file in image_files]
 for image_file in image_files:
-    catalog_entry = image_catalog_entry(image_file)
-    print(catalog_entry)
+    print(f"Processing {image_file}")
+    image_catalog_entry(image_file)

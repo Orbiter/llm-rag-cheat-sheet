@@ -44,6 +44,7 @@ async def chat_completions(request: ChatRequest):
     try:
         user_message = next((msg.content for msg in request.messages[::-1] if msg.role == "user"), "")
         context = get_context(user_message)
+        print("context:\n", context + "\n")
         messages = [{"role": "system", "content": f"You are a helpful assistant. Use the following context if relevant:\n{context}"}] + [msg.model_dump() for msg in request.messages]
         if request.stream:
             async def event_stream():
