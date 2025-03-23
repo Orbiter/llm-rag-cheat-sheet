@@ -18,6 +18,8 @@ urls=(
     "https://upload.wikimedia.org/wikipedia/commons/2/28/Commodore64withdisk.jpg"
     "https://upload.wikimedia.org/wikipedia/commons/0/02/Minecraft_Wiki_2023_textless.png"
     "https://upload.wikimedia.org/wikipedia/en/d/de/Doom_ingame_1.png"
+    "https://upload.wikimedia.org/wikipedia/commons/1/12/Prince_Igor_Full_score_01.jpg"
+    "https://upload.wikimedia.org/wikipedia/commons/f/f5/BWV739.png"
 )
 
 for url in "${urls[@]}"; do
