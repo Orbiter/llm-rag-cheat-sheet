@@ -6,35 +6,37 @@ import java.util.*;
 public class json_format_java {
     @SuppressWarnings("unchecked")
     public static void main(String[] args) throws Exception {
-        Map<String, Object> format = new java.util.LinkedHashMap<>();
-        format.put("title", "Translation");
-        format.put("type", "object");
-        format.put("properties", new java.util.LinkedHashMap<>(Map.of(
-            "english", Map.of("type", "string"),
-            "german", Map.of("type", "string"),
-            "spanish", Map.of("type", "string"),
-            "italian", Map.of("type", "string")
-        )));
-        format.put("required", List.of("german", "spanish"));
+        Map<String, Object> schema = Map.of(
+            "title", "Translation",
+            "type", "object",
+            "properties", Map.of(
+                "english", Map.of("type", "string"),
+                "german", Map.of("type", "string"),
+                "spanish", Map.of("type", "string"),
+                "italian", Map.of("type", "string")
+            ),
+            "required", List.of("german", "spanish")
+        );
         List<?> messages = List.of(
             Map.of("role", "system", "content", "Translate the user sentence."),
             Map.of("role", "user", "content", "I love programming.")
         );
         Map<String, ?>  payload = Map.of(
             "model", "llama3.2", "temperature", 0.1, "max_tokens", 1024,
-            "messages", messages, "stream", false, "format", format
+            "messages", messages, "stream", false,
+            "response_format", Map.of("type", "json_schema", "json_schema", Map.of("strict", "true", "schema", schema))
         );
         String jsonPayload = SimpleJson.json2string(payload);
         var client = HttpClient.newHttpClient();
         var request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:11434/api/chat"))
+            .uri(URI.create("http://localhost:11434/v1/chat/completions"))
             .header("Content-Type", "application/json")
             .POST(BodyPublishers.ofString(jsonPayload))
             .build();
-        var response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        String jsonstring = response.body();
-        Map<String,?> json = SimpleJson.toMap(jsonstring);
-        Map<String,?> message = (Map<String,?>) json.get("message");
+        var conn = client.send(request, HttpResponse.BodyHandlers.ofString());
+        Map<String, ?> response = SimpleJson.toMap(conn.body());
+        Map<String, ?> choice = (Map<String, ?>) ((List<?>) response.get("choices")).get(0);
+        Map<String, ?> message = (Map<String, ?>) choice.get("message");
         Map<String, ?> content = SimpleJson.toMap((String) message.get("content"));
         System.out.println(SimpleJson.format(SimpleJson.json2string(content)));
     }

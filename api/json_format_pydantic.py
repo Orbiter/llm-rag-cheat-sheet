@@ -1,15 +1,14 @@
 import json
 import http.client
+from pydantic import BaseModel
 
-schema = {
-    "title": "Translation",
-    "type": "object",
-    "properties": {
-        "english": { "type": "string" }, "german": { "type": "string" },
-        "spanish": { "type": "string" }, "italian": { "type": "string" }
-    },
-    "required": [ "german", "spanish" ]
-}
+class TranslationFormat(BaseModel):
+    german: str
+    spanish: str
+    english: str | None = None
+    italian: str | None = None
+
+schema = TranslationFormat.model_json_schema()
 messages = [
     {"role": "system", "content": "Translate the user sentence."},
     {"role": "user", "content": "I love programming."}
