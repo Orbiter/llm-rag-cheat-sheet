@@ -1,7 +1,7 @@
 import json
 import http.client
 
-def decider(proposition: str, compute_confidence: bool = True, binary: bool = True) -> bool:
+def verifier(proposition: str, compute_confidence: bool = True, binary: bool = True) -> bool:
     true_tokens = ["true", "True", "TRUE", "1", "Proven", "⊤", "T"]
     false_tokens = ["false", "False", "FALSE", "0", "Disproven", "⊥", "F"]
     undecided_tokens = ["maybe", "Maybe", "unknown", "Unknown", "undecided", "open", "undefined"]
@@ -87,10 +87,10 @@ propositions = [
     ("Gödel's Incompleteness Theorem is true", True),
 ]
 
-# test the decider function
+# test the verifier function
 correct = 0
 for proposition, true_truth in propositions:
-    computed_truth, confidence = decider(proposition, True, False)
+    computed_truth, confidence = verifier(proposition, True, False)
     if computed_truth != true_truth:
         print(f"Error: {proposition} -> {computed_truth}, confidence {confidence} (expected: {true_truth})")
     else:
