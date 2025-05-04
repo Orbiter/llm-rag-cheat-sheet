@@ -1,6 +1,6 @@
 import json, http.client
 
-HOST, PORT, MODEL = "localhost", 11434, "qwen3-coder:30b-a3b-q4_K_M"
+HOST, PORT, MODEL = "localhost", 11434, "llama3.2"
 CLASSES = ["comm_email", "summarization", "data_analysis", "other"]
 
 def class_block(business_class):
@@ -57,7 +57,5 @@ if __name__ == "__main__":
         "Write a polite follow-up email to a supplier about a delayed shipment.",
         "Summarize the attached Q3 operations report in 5 bullets.",
         "From this CSV of weekly sales by region, identify trends and anomalies.",
-        "A customer reports that their order arrived damaged. Write a response that apologizes and explains how they can request a replacement.", # customer support
-        "Compare the pricing and target audience of Apple’s Vision Pro and Meta Quest 3 headsets.", # market research
-        "Write a catchy LinkedIn post announcing our company’s participation in the Green Tech Expo." # content marketing
+        "Write a catchy LinkedIn post announcing our company’s participation in the Green Tech Expo." # -> should fill other_label
     ]: classify_prompt(p)
