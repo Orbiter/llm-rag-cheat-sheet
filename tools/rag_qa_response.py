@@ -63,7 +63,7 @@ messages = [
 ]
 
 payload = {
-    "model": "qwen3:4b-instruct-2507-q4_K_M",
+    "model": "llama3.2",
     "temperature": 0.2,
     "max_tokens": 1024,
     "messages": messages,

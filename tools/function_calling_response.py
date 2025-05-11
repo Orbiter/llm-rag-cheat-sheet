@@ -39,7 +39,7 @@ initial_messages = [
 ]
 
 initial_payload = {
-    "model": "qwen3:4b-instruct-2507-q4_K_M",
+    "model": "llama3.2",
     "temperature": 0.1,
     "max_tokens": 1024,
     "messages": initial_messages,
@@ -100,7 +100,7 @@ try:
     })
 
   follow_up_payload = {
-      "model": "qwen3:4b-instruct-2507-q4_K_M",
+      "model": "llama3.2",
       "temperature": 0.1,
       "max_tokens": 1024,
       "messages": follow_up_messages,
