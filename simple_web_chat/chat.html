@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Minimal Chat Demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            color-scheme: light dark;
+            --bg: #f5f5f5;
+            --panel: #fff;
+            --text: #111;
+            --muted: #555;
+            --accent: #2f6fed;
+            --border: #d0d0d0;
+            --bubble: #e8ecf8;
+            --system: #fff4d7;
+            --shadow: 0 6px 18px rgba(15, 23, 42, 0.15);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+        .app {
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: min(360px, 30%);
+            background: var(--panel);
+            border-right: 1px solid var(--border);
+            padding: 2rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            box-shadow: var(--shadow);
+        }
+        .sidebar h2 {
+            margin: 0;
+            font-size: 0.95rem;
+            letter-spacing: 0.08em;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+        .settings {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.75rem;
+        }
+        .settings > label {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+        .model-list {
+            padding: 0.2rem 0;
+            text-align: left;
+        }
+        .model-option {
+            display: flex;
+            gap: 0.4rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin: 0.1rem 0;
+            justify-content: flex-start;
+        }
+        .model-option input { accent-color: var(--accent); }
+        .model-status,
+        .chat-header p { color: var(--muted); }
+        .model-status { margin: 0.25rem 0 0; }
+        .hidden { display: none; }
+        .option-list {
+            display: grid;
+            gap: 0.4rem;
+            padding: 0.2rem 0;
+        }
+        .option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .option input { accent-color: var(--accent); margin: 0; }
+        input:not([type="radio"]),
+        textarea {
+            padding: 0.65rem 0.75rem;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            font: inherit;
+        }
+        textarea {
+            resize: none;
+            overflow: hidden;
+        }
+        .actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+        button {
+            padding: 0.75rem 1.1rem;
+            border: none;
+            border-radius: 12px;
+            font: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            background: var(--accent);
+            color: #fff;
+            transition: opacity 0.2s ease;
+            box-shadow: var(--shadow);
+        }
+        button:hover { opacity: 0.85; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .chat-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            padding: 2rem clamp(1rem, 4vw, 4rem);
+        }
+        .chat-header h1 {
+            margin: 0;
+            font-size: clamp(1.3rem, 2vw, 1.8rem);
+        }
+        .chat-header p { margin: 0.2rem 0 1.5rem; }
+        .chat-log,
+        .chat-messages {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .chat-log {
+            flex: 1;
+            overflow-y: auto;
+        }
+        .message {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            background: var(--bubble);
+            color: var(--text);
+            white-space: pre-wrap;
+        }
+        .message.user {
+            align-self: flex-end;
+            background: var(--accent);
+            color: #fff;
+        }
+        .message.system {
+            align-self: center;
+            background: var(--system);
+        }
+        .composer {
+            display: flex;
+            gap: 0.75rem;
+            align-items: flex-end;
+            padding-top: 0.5rem;
+        }
+        .composer textarea {
+            flex: 1;
+            min-height: 44px;
+            line-height: 1.2;
+            padding: 0.65rem 0.9rem;
+            max-height: 40vh;
+        }
+        .composer button {
+            align-self: flex-end;
+            height: fit-content;
+        }
+        @media (max-width: 920px) {
+            .app { flex-direction: column; }
+            .sidebar {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+                box-shadow: none;
+            }
+        }
+        @media (max-width: 640px) {
+            .composer { flex-direction: column; }
+            .composer button { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <aside class="sidebar">
+            <div class="actions">
+                <button id="resetConversation" type="button">Reset conversation</button>
+                <button id="clearStorage" type="button">Reset stored values</button>
+            </div>
+            <h2>RAG</h2>
+            <section class="settings">
+                <label>
+                    Context
+                    <input id="contextInput" type="text" placeholder="Add context for retrieval" autocomplete="off">
+                </label>
+                <label>
+                    Injection Method
+                    <div class="option-list" role="group" aria-label="RAG injection selection">
+                        <label class="option">
+                            <input type="radio" name="ragSource" value="system-prompt">
+                            <span>System Prompt</span>
+                        </label>
+                        <label class="option">
+                            <input type="radio" name="ragSource" value="chat-history">
+                            <span>Chat History</span>
+                        </label>
+                        <label class="option">
+                            <input type="radio" name="ragSource" value="prompt-injection">
+                            <span>Prompt Injection</span>
+                        </label>
+                        <label class="option">
+                            <input type="radio" name="ragSource" value="pseudo-tooling">
+                            <span>Pseudo-Tooling</span>
+                        </label>
+                        <label class="option">
+                            <input type="radio" name="ragSource" value="off">
+                            <span>Off</span>
+                        </label>
+                    </div>
+                </label>
+            </section>
+            <h2>Configuration</h2>
+            <section class="settings">
+                <label>
+                    API Host
+                    <input id="apiHost" type="text" placeholder="https://api.openai.com" autocomplete="off">
+                </label>
+                <label>
+                    Model
+                    <div class="model-list" id="modelList" role="group" aria-label="Available models"></div>
+                </label>
+                <label id="apiKeyRow">
+                    API Key
+                    <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off">
+                </label>
+                <label>
+                    System Prompt
+                    <textarea id="systemPrompt" rows="3"></textarea>
+                </label>
+            </section>
+        </aside>
+        <main class="chat-panel">
+            <div class="chat-header">
+                <h1>Test Chat</h1>
+                <p>Simple chat client with on-device storage and streaming responses.</p>
+            </div>
+            <section class="chat-log" id="chatLog" aria-live="polite">
+                <div class="chat-messages" id="chatMessages"></div>
+                <form class="composer" id="chatForm">
+                    <textarea id="userInput" placeholder="Ask me anything..." required></textarea>
+                    <button type="submit" id="sendButton">Send</button>
+                </form>
+            </section>
+        </main>
+    </div>
+    <script>
+    class SyncIDBStore {
+        constructor(db, storeName, map, writeQueue) {
+            this._db = db;
+            this._storeName = storeName;
+            this._map = map;
+            this._writeQueue = writeQueue;
+        }
+        static async create({ dbName = 'KVDB', storeName = 'kv', version = 1 } = {}) {
+            const openReq = indexedDB.open(dbName, version);
+            openReq.onupgradeneeded = () => openReq.result.createObjectStore(storeName);
+            const db = await new Promise((resolve, reject) => {
+                openReq.onsuccess = () => resolve(openReq.result);
+                openReq.onerror = () => reject(openReq.error);
+            });
+            const map = new Map();
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction(storeName, 'readonly');
+                const store = tx.objectStore(storeName);
+                const req = store.openCursor();
+                req.onsuccess = event => {
+                    const cursor = event.target.result;
+                    if (!cursor) return resolve();
+                    map.set(cursor.key, cursor.value);
+                    cursor.continue();
+                };
+                req.onerror = () => reject(req.error);
+            });
+            const writeQueue = [];
+            function flush() {
+                if (!writeQueue.length) return;
+                const ops = writeQueue.splice(0);
+                const tx = db.transaction(storeName, 'readwrite');
+                const store = tx.objectStore(storeName);
+                for (const { op, key, val } of ops) {
+                    if (op === 'set') store.put(val, key);
+                    if (op === 'del') store.delete(key);
+                    if (op === 'clear') store.clear();
+                }
+                tx.onerror = () => console.warn('IDB flush error', tx.error);
+            }
+            setInterval(flush, 200);
+            return new SyncIDBStore(db, storeName, map, writeQueue);
+        }
+        getItem(key) { return this._map.has(key) ? this._map.get(key) : null; }
+        setItem(key, val) { this._map.set(key, val); this._writeQueue.push({ op: 'set', key, val }); }
+        removeItem(key) { this._map.delete(key); this._writeQueue.push({ op: 'del', key }); }
+        clear() { this._map.clear(); this._writeQueue.push({ op: 'clear' }); }
+    }
+
+    const defaultSystemPrompt = 'You are a smart and helpful chatbot. If possible, use friendly emojies.';
+    const defaultApiHost = (window.location.origin && window.location.origin.includes('http'))
+        ? window.location.origin
+        : 'http://localhost:11434';
+
+    function createDefaultConfig() {
+        return {
+            apiHost: defaultApiHost,
+            apiKey: '',
+            model: 'llama3.2:latest',
+            systemPrompt: defaultSystemPrompt,
+            context: '',
+            ragSource: 'off'
+        };
+    }
+
+    const state = {
+        store: null,
+        messages: [],
+        models: [],
+        config: createDefaultConfig(),
+        busy: false
+    };
+
+    const dom = {
+        chatLog: document.getElementById('chatLog'),
+        messages: document.getElementById('chatMessages'),
+        form: document.getElementById('chatForm'),
+        input: document.getElementById('userInput'),
+        sendButton: document.getElementById('sendButton'),
+        apiHost: document.getElementById('apiHost'),
+        apiKey: document.getElementById('apiKey'),
+        apiKeyRow: document.getElementById('apiKeyRow'),
+        modelList: document.getElementById('modelList'),
+        systemPrompt: document.getElementById('systemPrompt'),
+        contextInput: document.getElementById('contextInput'),
+        ragSourceInputs: Array.from(document.querySelectorAll('input[name="ragSource"]')),
+        resetConversation: document.getElementById('resetConversation'),
+        clearStorage: document.getElementById('clearStorage')
+    };
+
+    function appendMessage(role, text) {
+        const node = document.createElement('div');
+        node.className = `message ${role}`;
+        node.textContent = text;
+        dom.messages.appendChild(node);
+        dom.chatLog.scrollTop = dom.chatLog.scrollHeight;
+        return node;
+    }
+
+    function syncInputs() {
+        dom.apiHost.value = state.config.apiHost;
+        dom.apiKey.value = state.config.apiKey;
+        dom.systemPrompt.value = state.config.systemPrompt;
+        if (dom.contextInput) {
+            dom.contextInput.value = state.config.context || '';
+        }
+        if (dom.ragSourceInputs?.length) {
+            dom.ragSourceInputs.forEach(input => {
+                input.checked = input.value === state.config.ragSource;
+            });
+        }
+        updateApiKeyVisibility();
+        resizeSystemPrompt();
+    }
+
+    function corsHint(err) {
+        const msg = String(err?.message || err);
+        return /CORS|Access-Control-Allow-Origin/i.test(msg)
+            ? 'If you are on macOS, run `launchctl setenv OLLAMA_ORIGINS "*"` then restart Ollama.'
+            : '';
+    }
+
+    function updateApiKeyVisibility() {
+        if (!dom.apiKeyRow) return;
+        const host = (dom.apiHost?.value || state.config.apiHost || '').toLowerCase();
+        const shouldShow = host && !host.includes('localhost');
+        dom.apiKeyRow.style.display = shouldShow ? '' : 'none';
+    }
+
+    function persist(key, value) {
+        state.config[key] = value;
+        if (state.store) {
+            state.store.setItem(key, value);
+        }
+    }
+
+    function injectContext(base, context) {
+        return `${base}\n\nIf required, use the following context:\n\n${context}`;
+    }
+
+    function getEffectiveSystemPrompt() {
+        const base = state.config.systemPrompt || '';
+        const context = state.config.context?.trim();
+        if (state.config.ragSource === 'system-prompt' && context) {
+            return injectContext(base, context);
+        }
+        return base;
+    }
+
+    function ensureSystemMessage(promptText) {
+        if (!promptText?.trim()) return;
+        if (!state.messages.length || state.messages[0].role !== 'system') {
+            state.messages.unshift({ role: 'system', content: promptText });
+        } else {
+            state.messages[0].content = promptText;
+        }
+    }
+
+    function buildMessagesWithRagInjection(userPrompt) {
+        const context = state.config.context?.trim();
+        const effectiveSource = context ? state.config.ragSource : 'off';
+        const useChatHistoryInjection = effectiveSource === 'chat-history';
+        const usePromptInjection = effectiveSource === 'prompt-injection';
+        const usePseudoTooling = effectiveSource === 'pseudo-tooling';
+        const baseMessages = [...state.messages];
+        if (useChatHistoryInjection) {
+            const systemIndex = baseMessages.findIndex(m => m.role === 'system');
+            const insertAt = systemIndex >= 0 ? systemIndex + 1 : 0;
+            baseMessages.splice(insertAt, 0,
+                { role: 'user', content: 'Bring up some information that could be useful for the following chat' },
+                { role: 'assistant', content: context }
+            );
+        }
+        const finalUserPrompt = usePromptInjection ? injectContext(userPrompt, context) : userPrompt;
+        const messages = [...baseMessages, { role: 'user', content: finalUserPrompt }];
+        if (usePseudoTooling) {
+            messages.push({
+                role: 'tool',
+                tool_call_id: 'context-search-1',
+                name: 'context-search',
+                content: context
+            });
+        }
+        return messages;
+    }
+
+    function buildToolsForPayload() {
+        const context = state.config.context?.trim();
+        if (!context) return undefined;
+        if (state.config.ragSource !== 'pseudo-tooling') return undefined;
+        return [{
+            type: 'function',
+            function: {
+                name: 'context-search',
+                description: 'Returns pre-provided contextual information for the chat',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        query: { type: 'string', description: 'The search query to retrieve context for' }
+                    },
+                    required: ['query'],
+                    additionalProperties: false
+                },
+                strict: true
+            }
+        }];
+    }
+
+    async function init() {
+        state.store = await SyncIDBStore.create({ dbName: 'MinimalChat', storeName: 'prefs' });
+        state.config.apiHost = state.store.getItem('apiHost') || defaultApiHost;
+        state.config.apiKey = state.store.getItem('apiKey') || '';
+        state.config.model = state.store.getItem('model') || 'llama3.2:latest';
+        state.config.systemPrompt = state.store.getItem('systemPrompt') || defaultSystemPrompt;
+        state.config.context = state.store.getItem('context') || '';
+        state.config.ragSource = state.store.getItem('ragSource') || 'off';
+        syncInputs();
+    }
+
+    async function streamChat(prompt) {
+        const effectiveSystemPrompt = getEffectiveSystemPrompt();
+        ensureSystemMessage(effectiveSystemPrompt);
+        const tools = buildToolsForPayload();
+        const payload = {
+            model: state.config.model,
+            messages: buildMessagesWithRagInjection(prompt),
+            stream: true,
+            ...(tools ? { tools } : {})
+        };
+        const headers = { 'Content-Type': 'application/json' };
+        if (state.config.apiKey && state.config.apiKey !== '_') {
+            headers['Authorization'] = `Bearer ${state.config.apiKey}`;
+        }
+        const response = await fetch(state.config.apiHost.replace(/\/$/, '') + '/v1/chat/completions', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+        }
+        if (!response.body) {
+            throw new Error('Streaming not supported by this browser.');
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let assistantText = '';
+        const assistantNode = appendMessage('assistant', '...');
+        const parseChunk = chunk => {
+            const lines = chunk.split('\n').map(line => line.trim()).filter(Boolean);
+            for (const line of lines) {
+                if (line === 'data: [DONE]' || line === '[DONE]') {
+                    return true;
+                }
+                const clean = line.replace(/^data:\s*/i, '');
+                if (!clean) continue;
+                try {
+                    const parsed = JSON.parse(clean);
+                    const delta = parsed?.choices?.[0]?.delta?.content;
+                    if (delta) {
+                        assistantText += delta;
+                        assistantNode.textContent = assistantText;
+                        dom.chatLog.scrollTop = dom.chatLog.scrollHeight;
+                    }
+                } catch (err) {
+                    console.warn('Failed to parse line', line, err);
+                }
+            }
+            return false;
+        };
+        let done = false;
+        while (!done) {
+            const { value, done: readerDone } = await reader.read();
+            if (readerDone) break;
+            const chunk = decoder.decode(value, { stream: true });
+            done = parseChunk(chunk);
+        }
+        state.messages.push({ role: 'user', content: prompt });
+        state.messages.push({ role: 'assistant', content: assistantText });
+    }
+
+    dom.form.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (state.busy) return;
+        const prompt = dom.input.value.trim();
+        if (!prompt) return;
+        state.busy = true;
+        dom.sendButton.disabled = true;
+        appendMessage('user', prompt);
+        dom.input.value = '';
+        resizeComposer();
+        try {
+            await streamChat(prompt);
+        } catch (err) {
+            const hint = corsHint(err);
+            appendMessage('system', `Error: ${err.message}${hint ? ` — ${hint}` : ''}`);
+        } finally {
+            state.busy = false;
+            dom.sendButton.disabled = false;
+        }
+    });
+
+    dom.apiHost.addEventListener('change', e => {
+        persist('apiHost', e.target.value.trim());
+        updateApiKeyVisibility();
+        loadModels();
+    });
+    dom.apiHost.addEventListener('input', updateApiKeyVisibility);
+    dom.apiKey.addEventListener('change', e => {
+        persist('apiKey', e.target.value.trim());
+        loadModels();
+    });
+    const saveSystemPrompt = () => {
+        if (!dom.systemPrompt) return;
+        persist('systemPrompt', dom.systemPrompt.value.trim());
+    };
+    dom.systemPrompt.addEventListener('change', saveSystemPrompt);
+    dom.systemPrompt.addEventListener('input', saveSystemPrompt);
+    const saveContext = () => {
+        if (!dom.contextInput) return;
+        persist('context', dom.contextInput.value);
+    };
+    if (dom.contextInput) {
+        dom.contextInput.addEventListener('change', saveContext);
+        dom.contextInput.addEventListener('input', saveContext);
+    }
+    if (dom.ragSourceInputs?.length) {
+        dom.ragSourceInputs.forEach(input => {
+            input.addEventListener('change', e => {
+                if (e.target.checked) {
+                    persist('ragSource', e.target.value);
+                }
+            });
+        });
+    }
+
+    function resizeComposer() {
+        const minHeight = 44;
+        dom.input.style.height = 'auto';
+        const maxHeight = Math.max(window.innerHeight * 0.5, 220);
+        const measured = dom.input.scrollHeight || minHeight;
+        const newHeight = Math.max(minHeight, Math.min(measured, maxHeight));
+        dom.input.style.height = `${newHeight}px`;
+        dom.chatLog.scrollTop = dom.chatLog.scrollHeight;
+    }
+
+    function resizeSystemPrompt() {
+        if (!dom.systemPrompt) return;
+        dom.systemPrompt.style.height = 'auto';
+        dom.systemPrompt.style.height = `${dom.systemPrompt.scrollHeight || dom.systemPrompt.clientHeight}px`;
+    }
+
+    async function fetchModelNames(host) {
+        const cleanHost = (host || '').replace(/\/$/, '');
+        if (!cleanHost) {
+            throw new Error('Missing API host');
+        }
+        try {
+            const ollamaRes = await fetch(`${cleanHost}/api/tags`);
+            if (!ollamaRes.ok) throw new Error(`HTTP ${ollamaRes.status}`);
+            const ollamaData = await ollamaRes.json();
+            const ollamaModels = (ollamaData?.models || []).map(m => m.name).filter(Boolean);
+            if (ollamaModels.length) {
+                return ollamaModels;
+            }
+        } catch (err) {
+            console.warn('Ollama tag fetch failed', err);
+        }
+        const headers = { 'Content-Type': 'application/json' };
+        if (state.config.apiKey && state.config.apiKey !== '_') {
+            headers['Authorization'] = `Bearer ${state.config.apiKey}`;
+        }
+        const openAIRes = await fetch(`${cleanHost}/v1/models`, { headers });
+        if (!openAIRes.ok) {
+            throw new Error(`HTTP ${openAIRes.status}`);
+        }
+        const openAIData = await openAIRes.json();
+        const openAIModels = (openAIData?.data || []).map(m => m.id).filter(Boolean);
+        if (!openAIModels.length) {
+            throw new Error('API returned no models');
+        }
+        return openAIModels;
+    }
+
+    function renderModelOptions() {
+        if (!dom.modelList) return;
+        dom.modelList.innerHTML = '';
+        if (!state.models.length) {
+            return;
+        }
+        const preferred = 'llama3.2:latest';
+        if (!state.config.model || !state.models.includes(state.config.model)) {
+            persist('model', state.models.includes(preferred) ? preferred : state.models[0]);
+        }
+        state.models.forEach(name => {
+            const option = document.createElement('label');
+            option.className = 'model-option';
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'model-option';
+            radio.value = name;
+            radio.checked = state.config.model === name;
+            radio.addEventListener('change', () => {
+                if (!radio.checked) return;
+                persist('model', name);
+            });
+            const text = document.createElement('span');
+            text.textContent = name;
+            option.appendChild(radio);
+            option.appendChild(text);
+            dom.modelList.appendChild(option);
+        });
+    }
+
+    async function loadModels() {
+        try {
+            const models = await fetchModelNames(state.config.apiHost || defaultApiHost);
+            state.models = models;
+            renderModelOptions();
+        } catch (err) {
+            console.warn('Failed to load model list', err);
+            state.models = state.config.model ? [state.config.model] : [];
+            renderModelOptions();
+        }
+    }
+
+    dom.input.addEventListener('input', resizeComposer);
+    dom.input.addEventListener('keydown', event => {
+        if (event.isComposing) return;
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            if (typeof dom.form.requestSubmit === 'function') {
+                dom.form.requestSubmit(dom.sendButton);
+            } else {
+                dom.form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            }
+        }
+    });
+    window.addEventListener('resize', resizeComposer);
+    dom.systemPrompt.addEventListener('input', resizeSystemPrompt);
+
+    dom.resetConversation.addEventListener('click', () => {
+        state.messages = [];
+        dom.messages.innerHTML = '';
+    });
+
+    dom.clearStorage.addEventListener('click', () => {
+        if (!state.store) return;
+        state.store.clear();
+        state.config = createDefaultConfig();
+        for (const [key, value] of Object.entries(state.config)) {
+            state.store.setItem(key, value);
+        }
+        syncInputs();
+        dom.messages.innerHTML = '';
+        state.messages = [];
+        loadModels();
+    });
+
+    init()
+        .then(() => {
+            resizeComposer();
+            resizeSystemPrompt();
+            return loadModels();
+        })
+        .catch(err => appendMessage('system', `Failed to init storage: ${err.message}`));
+    </script>
+</body>
+</html>
