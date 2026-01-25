@@ -1,64 +1,48 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from flask import Flask, request, jsonify, Response, stream_with_context
+from flask_cors import CORS
 from langchain_community.document_loaders import TextLoader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.retrievers import TFIDFRetriever
 from langchain_ollama import ChatOllama
-from pydantic import BaseModel
-from typing import List, AsyncGenerator
-import time, json, asyncio
+import time, json
 
 documents = TextLoader("pg3008.txt").load()
 texts = CharacterTextSplitter(chunk_size=512, chunk_overlap=32).split_documents(documents)
 retriever = TFIDFRetriever.from_documents(texts)
 
-def get_context(question: str) -> str:
+def retrieval(question: str) -> str:
     return "\n\n----\n\n".join(doc.page_content for doc in retriever.invoke(question)[:2])
 
-app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app = Flask(__name__)
+CORS(app)
 
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
-class ChatRequest(BaseModel):
-    messages: List[ChatMessage]
-    model: str = "phi4"
-    temperature: float = 0.1
-    max_tokens: int = 600
-    stream: bool = False
-
-async def stream_response(messages: List[dict], model: str, temperature: float, max_tokens: int) -> AsyncGenerator[str, None]:
-    ollama = ChatOllama(model=model, temperature=temperature, num_predict=max_tokens)
-    response = ollama.invoke(messages)
+def stream_response(messages: list, model: str, temperature: float, max_tokens: int):
+    response = ChatOllama(model=model, temperature=temperature, num_predict=max_tokens).invoke(messages)
     content = response.content if response.content else "No response generated"
     for i in range(0, len(content), 20):
         yield f"data: {json.dumps({'choices': [{'delta': {'content': content[i:i + 20]}}]})}\n\n"
-        await asyncio.sleep(0.05)
+        time.sleep(0.05)
     yield "data: [DONE]\n\n"
 
-@app.post("/v1/chat/completions")
-async def chat_completions(request: ChatRequest):
+@app.route("/v1/chat/completions", methods=["POST"])
+def chat_completions():
     try:
-        user_message = next((msg.content for msg in request.messages[::-1] if msg.role == "user"), "")
-        context = get_context(user_message)
-        print("context:\n", context + "\n")
-        messages = [{"role": "system", "content": f"You are a helpful assistant. Use the following context if relevant:\n{context}"}] + [msg.model_dump() for msg in request.messages]
-        if request.stream:
-            async def event_stream():
-                async for chunk in stream_response(messages, request.model, request.temperature, request.max_tokens):
-                    yield chunk
-            return StreamingResponse(event_stream(), media_type="text/event-stream")
-        else:
-            ollama = ChatOllama(model=request.model, temperature=request.temperature, num_predict=request.max_tokens)
-            response = ollama.invoke(messages)
-            content = response.content if response.content else "No response generated"
-            return {"id": f"chatcmpl-{int(time.time())}", "object": "chat.completion", "created": int(time.time()), "model": request.model, "choices": [{"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}}
+        data = request.get_json()
+        stream = data.get("stream", False)
+        if not stream:
+            return jsonify({"error": "proxy requires streaming"}), 400
+        messages_data = data.get("messages", [])
+        user_message = next((msg["content"] for msg in reversed(messages_data) if msg["role"] == "user"), "")
+        context = retrieval(user_message)
+        messages = [{"role": "system", "content": f"You are a helpful assistant. Use the following context if relevant:\n{context}"}]
+        messages.extend(messages_data)
+        def generate():
+            for chunk in stream_response(messages, data.get("model", "phi4"), data.get("temperature", 0.1), data.get("max_tokens", 600)):
+                yield chunk
+        return Response(stream_with_context(generate()), mimetype="text/event-stream")
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8010)
+    app.run(host="0.0.0.0", port=8010)
