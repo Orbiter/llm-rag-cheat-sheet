@@ -1,47 +1,25 @@
-import base64
-import http.client
-import json
-
-def add_two_numbers(a: int, b: int) -> int:
-  """
-  Add two numbers
-
-  Args:
-    a: The first integer number
-    b: The second integer number
-
-  Returns:
-    int: The sum of the two numbers
-  """
-  return a + b
+import base64, http.client, json
 
 tools = [{
     "type": "function",
     "function": {
-        "name": "get_weather",
-        "description": "Get current temperature for a given location.",
+        "name": "get_weather", "description": "Get current temperature for a given location.", "strict": True,
         "parameters": {
             "type": "object",
             "properties": {
                 "location": { "type": "string", "description": "City and country e.g. Bogotá, Colombia" }
             },
-            "required": [ "location" ],
-            "additionalProperties": False
-        },
-        "strict": True
+            "required": [ "location" ], "additionalProperties": False
+        }
     }
 }]
 
 payload = {
-    "model": "llama3.2",
-    "temperature": 0.1,
-    "max_tokens": 1024,
+    "model": "llama3.2", "temperature": 0.1, "max_tokens": 1024, "tools": tools, "stream": False,
     "messages": [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "What is the weather like in Paris today?"}
-    ],
-    "tools": tools,
-    "stream": False
+    ]
 }
 
 try:
